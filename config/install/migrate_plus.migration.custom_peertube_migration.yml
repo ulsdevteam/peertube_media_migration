@@ -1,0 +1,69 @@
+langcode: en
+status: true
+dependencies: { }
+id: custom_peertube_migration
+label: 'Extract peertube media to file'
+class: null
+field_plugin_method: null
+cck_plugin_method: null
+migration_group: custom_peertube_migration
+
+source:
+  plugin: content_entity:media
+  entity_type: media
+  bundle: remote_video
+  fields:
+    - mid
+    - vid
+    - name
+    - field_media_oembed_video
+    - field_tn_uri
+    - field_media_of
+process:
+  # map source fields onto destination
+  # apply skip condition from source rows
+  skip_bundle:                             
+    plugin: skip_on_value             
+    source: bundle/0/target_id       
+    method: row   
+    value:                        
+      - 'audio'                          
+      - 'extracted_text'                 
+      - 'file'                           
+      - 'fits_technical_metadata'        
+      - 'image'                          
+      - 'video'                          
+      - 'document'
+
+  oembed_url:                           
+    plugin: extract                      
+    source: field_media_oembed_video     
+    index: [0, value]
+    default_value: ''
+  media_of:
+    plugin: extract
+    source: field_media_of
+    index: [0, target_id]
+    default_value: ''
+  oembed_video_data:                               
+    plugin: video_image_source               
+    source: 
+      - field_media_oembed_video/0/value 
+      - field_media_of/0/target_id
+      - name/0/value
+  name:                                                                                                                            
+    plugin: extract                                                                                                                
+    source: name                                                                                                                   
+    index: [0, value]
+  tn_id:                           
+    plugin: extract                      
+    source: field_tn_uri     
+    index: [0, value]
+  id: mid
+  vid: vid
+  parent_repo_item_id: field_media_of/0/target_id 
+destination: 
+  plugin: csv_export
+migration_tags:
+  - 'Export'
+migration_dependencies: null
