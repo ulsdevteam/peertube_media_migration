@@ -8,3 +8,4 @@ dependencies:
   - drupal:migrate_plus
   - drupal:migrate_tools
   - drupal:media
+  - drupal:file

@@ -1,6 +1,9 @@
 <?php
 
 namespace Drupal\custom_peertube_migration\Plugin\migrate\process;
+if (!defined('PCDM_URI')) {
+	define('PCDM_URI', "http://pcdm.org/use#ThumbnailImage");
+	}
 
 use Drupal\migrate\MigrateExecutableInterface;
 use Drupal\migrate\ProcessPluginBase;
@@ -31,20 +34,19 @@ class VideoImageSource extends ProcessPluginBase {
 
     //get peertube api prefix as the pattern to match
     $uri_prefix =\Drupal::config('custom_peertube_migration.settings')->get('base_uri'); 
-    $escapedUri = preg_quote(substr($uri_prefix, strlen('https://')), '/');
-    $pattern = "#". $escapedUri . "/w/([a-zA-Z0-9]+)#";
-
+    $pattern = trim($uri_prefix) . "/w/";
+    
     //get source parameters
     $videoUrl = $value[0];
     $parent_repository_item_id = $value[1]; 
     $video_name = $value[2]; 
     
-   if (!(preg_match("@^https://@i", $videoUrl) && preg_match($pattern, substr($videoUrl, strlen('https://')), $matches))) {  	
+     if ( stripos($videoUrl, $pattern) !== 0) {
+	\Drupal::logger('custom_peertube_migration')->info('Video URL Not matched on record: @data', ['@data' => $video_name]);
 	throw new MigrateSkipRowException('Media Video Source URL does not match peertube pattern');
 	} else {
-   		// \Drupal::logger('custom_peertube_migration')->info('found matched row: @data', ['@data' => $pattern]);
-    		$videoId =  $matches[1];
-	
+    		$videoId = basename(substr($videoUrl, strlen($pattern))); //only take the lastpart of videoUrl
+	        
 		//Step1. handle image migration into drupal
 		$peertube_api = $uri_prefix . '/api/v1/videos/' . $videoId;
 		$peertube_client = \Drupal::httpClient();
@@ -69,53 +71,53 @@ class VideoImageSource extends ProcessPluginBase {
 
 				//create media entity
 				if ($tn_file) {
-					$media_term = $this->getMediaUseTerm('Thumbnail Image');
-					$media_item = Media::create([
-						'bundle' => 'image',
-						'name' => "Thumbnail_{$data['name']}",
-						'field_media_image' => [
-							'target_id' => $tn_file->id(),
-						'alt' => "Thumbnail of Video {$videoId}",
-						],
-					'field_media_use' => [ //refer to islandora media usage taxonomy
-						'target_id' => $media_term->id(),
-						],
-					'field_media_of' => [ //refer to parent repository item 
-						'target_id' => $parent_repository_item_id,
-						],
-					]);
-
+					$media_term = $this->getMediaUseTerm(PCDM_URI);
+					if($media_term) {
+						$media_item = Media::create([
+							'bundle' => 'image',
+							'name' => "Thumbnail_{$data['name']}",
+							'field_media_image' => [
+								'target_id' => $tn_file->id(),
+								'alt' => "Thumbnail of Video {$videoId}",
+							],
+							'field_media_use' => [ //refer to islandora media usage taxonomy
+								'target_id' => $media_term->id(),
+							],
+							'field_media_of' => [ //refer to parent repository item 
+								'target_id' => $parent_repository_item_id,
+							],
+						]);
 					$media_item->save();
 					return $media_item->id();
+					}
 				}
 			}
 		}
-	catch(\Exception $e) {
-	\Drupal::logger('custom_peertube_migration')->error('Failed to connect Peertube API: @msg.', ['@msg' => $e->getMessage()]);
+		catch(\Exception $e) {
+		\Drupal::logger('custom_peertube_migration')->error('Failed to connect Peertube API: @msg.', ['@msg' => $e->getMessage()]);
 		}
 	}
 }
 
-/**
+/** 
  * Retrieve Media Usage from Taxonomy Terms. e.g. Service File, Thumbnail Image, Extracted Text 
  */
-protected function getMediaUseTerm(string $usage_name) {
-	$terms = \Drupal::entityTypeManager()
-		->getStorage('taxonomy_term')
-		->loadByProperties([
-			'vid' => 'islandora_media_use',
-			'name' => $usage_name,
-		]);
-		
-	//handle if no needed media usage defined in taxonomy
-	if ( empty($terms) ) {
-		$term = Term::create ([
-			'vid' => 'islandora_media_use',
-			'name' => $usage_name,			
-		]);
-		$term->save();
-		return $term;			
-	} 
-	return reset($terms); //only retrieve first term matched
+protected function getMediaUseTerm(string $uri) {
+	$term_query = \Drupal::entityQuery('taxonomy_term')
+			->accessCheck(FALSE)
+			->condition('vid', 'islandora_media_use');                                                                                     $term_results = $term_query->execute();
+	
+	$terms = Term::loadMultiple($term_results);
+        $target_term = NULL;
+
+        //filter term objects via a given value of target_name 
+        foreach ($terms as $term) {
+             if ($term->hasField('field_external_uri') 
+                        && strcasecmp(trim($term->get('field_external_uri')->getValue()[0]['uri']), trim($uri)) ===0) {
+                        $target_term =  $term;
+                        break;
+                        }
+        }
+        return $target_term;//only retrieve first term matched
    }
 }

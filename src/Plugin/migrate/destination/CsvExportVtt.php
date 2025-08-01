@@ -9,11 +9,11 @@ use Drupal\migrate\Row;
  * Provide peertube export videoID to destination
  *
  * @MigrateDestination(
- *   id = "csv_export"
+ *   id = "csv_export_vtt"
  * )
  */
 
-class CsvExport extends DestinationBase {
+class CsvExportVtt extends DestinationBase {
 
   protected $filePath;
 
@@ -31,14 +31,14 @@ class CsvExport extends DestinationBase {
 	];
 
   //open file to write
-  $tmp_path = 'temporary://' . "temp_media_export_" . date("Y_m_d") . ".csv";
+  $tmp_path = 'temporary://' . 'temp_media_vtt_export_' .  date("Y_m_d") . '.csv';                                                                
   $filePath =  \Drupal::service('file_system')->realpath($tmp_path); 
   $headers = !file_exists($filePath) || filesize($filePath) ==0;
   $file = fopen($filePath, 'a');
   if ( $headers ) {
  		fputcsv($file, array_keys($data));	
   	}
-\Drupal::logger('custom_peertube_migration')->info('CSV value: @data', ['@data' => print_r($data,TRUE)]);
+\Drupal::logger('custom_peertube_migration')->info('CSV Vtt value: @data', ['@data' => print_r($data,TRUE)]);
   fputcsv($file, array_values($data));
   fclose($file);
   return [$data['id']];

@@ -1,8 +1,8 @@
 langcode: en
 status: true
 dependencies: { }
-id: custom_peertube_migration
-label: 'Extract peertube media to file'
+id: custom_peertube_migration_tn
+label: 'Extract peertube media thumbnails to drupal'
 class: null
 field_plugin_method: null
 cck_plugin_method: null
@@ -21,29 +21,19 @@ source:
     - field_media_of
 process:
   # map source fields onto destination
-  # apply skip condition from source rows
-  skip_bundle:                             
-    plugin: skip_on_value             
-    source: bundle/0/target_id       
-    method: row   
-    value:                        
-      - 'audio'                          
-      - 'extracted_text'                 
-      - 'file'                           
-      - 'fits_technical_metadata'        
-      - 'image'                          
-      - 'video'                          
-      - 'document'
-
+  vid:
+    plugin: get
+    source: vid
+  id:
+    plugin: get
+    source: mid 
+  parent_repo_item_id:
+    plugin: get
+    source: field_media_of/0/target_id
   oembed_url:                           
     plugin: extract                      
     source: field_media_oembed_video     
     index: [0, value]
-    default_value: ''
-  media_of:
-    plugin: extract
-    source: field_media_of
-    index: [0, target_id]
     default_value: ''
   oembed_video_data:                               
     plugin: video_image_source               
@@ -59,9 +49,6 @@ process:
     plugin: extract                      
     source: field_tn_uri     
     index: [0, value]
-  id: mid
-  vid: vid
-  parent_repo_item_id: field_media_of/0/target_id 
 destination: 
   plugin: csv_export
 migration_tags:
