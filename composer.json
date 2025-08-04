@@ -1,0 +1,9 @@
+{
+  "name": "drupal/custom_peertube_migration",
+  "type": "drupal-module-custom",
+  "description": "A custom module to migrate thumbnail and captions from peertube into Drupal",
+  "keywords": ["Drupal"],
+  "license": "GPL-2.0-or-later",
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
