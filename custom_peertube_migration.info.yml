@@ -7,5 +7,6 @@ dependencies:
   - drupal:migrate
   - drupal:migrate_plus
   - drupal:migrate_tools
+  - migrate_drupal
   - drupal:media
   - drupal:file
