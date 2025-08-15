@@ -1,9 +1,6 @@
 <?php
 
 namespace Drupal\custom_peertube_migration\Plugin\migrate\process;
-if (!defined('PCDM_URI')) {
-	define('PCDM_URI', "http://pcdm.org/use#ThumbnailImage");
-	}
 
 use Drupal\migrate\MigrateExecutableInterface;
 use Drupal\migrate\ProcessPluginBase;
@@ -27,6 +24,9 @@ use Drupal\taxonomy\Entity\Term;
 
 class VideoImageSource extends ProcessPluginBase {
 
+  //declare an thumbnail constant
+  const PCDM_URI = 'http://pcdm.org/use#ThumbnailImage';
+
   /**
    * {@inheritdoc}
    */
@@ -45,8 +45,17 @@ class VideoImageSource extends ProcessPluginBase {
 	\Drupal::logger('custom_peertube_migration')->info('Video URL Not matched on record: @data', ['@data' => $video_name]);
 	throw new MigrateSkipRowException('Media Video Source URL does not match peertube pattern');
 	} else {
-    		$videoId = basename(substr($videoUrl, strlen($pattern))); //only take the lastpart of videoUrl
-	        
+    		//$videoId = basename(substr($videoUrl, strlen($pattern))); //only take the lastpart of videoUrl
+	       
+		$remainings = substr($videoUrl, strlen($pattern));
+		//find first special char ?/ after pattern
+		$endPos1 = strpos($remainings, '/');
+		$endPos2 = strpos($remainings, '?');
+		
+		//retrieve the string ended from the first occurrence special char after pattern 
+		$end = min( $endPos1 !== false ? $endPos1: PHP_INT_MAX, $endPos2 !== false ? $endPos2 : PHP_INT_MAX);
+		$videoId = ($end === PHP_INT_MAX) ? $remainings : substr($remainings, 0, $end);
+		
 		//Step1. handle image migration into drupal
 		$peertube_api = $uri_prefix . '/api/v1/videos/' . $videoId;
 		$peertube_client = \Drupal::httpClient();
@@ -71,7 +80,7 @@ class VideoImageSource extends ProcessPluginBase {
 
 				//create media entity
 				if ($tn_file) {
-					$media_term = $this->getMediaUseTerm(PCDM_URI);
+					$media_term = $this->getMediaUseTerm(self::PCDM_URI);
 					if($media_term) {
 						$media_item = Media::create([
 							'bundle' => 'image',
@@ -105,18 +114,17 @@ class VideoImageSource extends ProcessPluginBase {
 protected function getMediaUseTerm(string $uri) {
 	$term_query = \Drupal::entityQuery('taxonomy_term')
 			->accessCheck(FALSE)
-			->condition('vid', 'islandora_media_use');                                                                                     $term_results = $term_query->execute();
+			->condition('vid', 'islandora_media_use')
+			->condition('field_external_uri.uri', trim($uri)); 
+	$term_results = $term_query->execute();
 	
 	$terms = Term::loadMultiple($term_results);
         $target_term = NULL;
 
         //filter term objects via a given value of target_name 
         foreach ($terms as $term) {
-             if ($term->hasField('field_external_uri') 
-                        && strcasecmp(trim($term->get('field_external_uri')->getValue()[0]['uri']), trim($uri)) ===0) {
-                        $target_term =  $term;
-                        break;
-                        }
+        	$target_term =  $term;
+                break;
         }
         return $target_term;//only retrieve first term matched
    }

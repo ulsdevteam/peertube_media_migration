@@ -17,7 +17,6 @@ source:
     - vid
     - name
     - field_media_oembed_video
-    - field_tn_uri
     - field_media_of
 process:
   # map source fields onto destination
@@ -44,10 +43,6 @@ process:
   name:                                                                                                                            
     plugin: extract                                                                                                                
     source: name                                                                                                                   
-    index: [0, value]
-  tn_id:                           
-    plugin: extract                      
-    source: field_tn_uri     
     index: [0, value]
 destination: 
   plugin: csv_export

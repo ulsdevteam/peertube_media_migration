@@ -1,9 +1,7 @@
 <?php
 
 namespace Drupal\custom_peertube_migration\Plugin\migrate\process;
-if (!defined('PCDM_TRANS_URI')) {
-        define('PCDM_TRANS_URI', 'http://pcdm.org/use#Transcript');
-        }
+
 use Drupal\migrate\MigrateExecutableInterface;
 use Drupal\migrate\ProcessPluginBase;
 use Drupal\migrate\Row;
@@ -26,6 +24,9 @@ use Drupal\taxonomy\Entity\Term;
 
 class VideoVttSource extends ProcessPluginBase {
 
+  //declare a local constant
+  const PCDM_TRANS_URI = 'http://pcdm.org/use#Transcript';
+
   /**
    * {@inheritdoc}
    */
@@ -44,10 +45,15 @@ class VideoVttSource extends ProcessPluginBase {
 	\Drupal::logger('custom_peertube_migration')->info('Video URL Not matched on record: @data', ['@data' => $video_name]);
 	throw new MigrateSkipRowException('Media Video Source URL does not match peertube pattern');
 	} else {
-    		$videoId = basename(substr($videoUrl, strlen($pattern))); //only take the lastpart of videoUrl
-	        
-		//step2.  handle video captions migration                                                                                                        
+	       $remainings = substr($videoUrl, strlen($pattern));
+		//find first special char ?/ after pattern 
+		$endPos1 = strpos($remainings, '/');
+		$endPos2 = strpos($remainings, '?');
+		$end = min( $endPos1 !== false ? $endPos1: PHP_INT_MAX, $endPos2 !== false ? $endPos2 : PHP_INT_MAX);
 
+		$videoId = ($end === PHP_INT_MAX) ? $remainings : substr($remainings, 0, $end);
+
+		//step2.  handle video captions migration
 		//construct params for vtt
 		$vtt_array = [
 		'prefix' => $uri_prefix,
@@ -55,7 +61,7 @@ class VideoVttSource extends ProcessPluginBase {
 		'video_id' => $videoId,
 		'repo_item_id' => $parent_repository_item_id ?? '' 
 		];
-		$this->viedoCaptions_handler($vtt_array); 
+		$this->videoCaptions_handler($vtt_array); 
 	}
 }
 
@@ -63,21 +69,17 @@ class VideoVttSource extends ProcessPluginBase {
  * Retrieve Media Usage from Taxonomy Terms. e.g. Service File, Thumbnail Image, Extracted Text 
  */
 protected function getMediaUseTerm(string $uri) {
-        $term_query = \Drupal::entityQuery('taxonomy_term')                                                                                             
-                ->accessCheck(FALSE)                                                                                                                    
-                ->condition('vid', 'islandora_media_use');                                                                                               
-                                                                                                                                                        
-        $term_results = $term_query->execute();                                                                                                                
-        $terms = Term::loadMultiple($term_results);
+        $term_query = \Drupal::entityQuery('taxonomy_term')
+			->accessCheck(FALSE)
+			->condition('vid', 'islandora_media_use')
+			->condition('field_external_uri.uri', trim($uri));                                                                              $term_results = $term_query->execute();
+	$terms = Term::loadMultiple($term_results);
         $target_term = NULL;
 
         //filter term objects via a given value of target_name 
         foreach ($terms as $term) {
-             if ($term->hasField('field_external_uri') 
-                        && strcasecmp(trim($term->get('field_external_uri')->getValue()[0]['uri']), trim($uri)) ===0) {
-                        $target_term =  $term;
-                        break;
-                        }
+        	$target_term =  $term;
+                break;
         }
         return $target_term;//only retrieve first term matched
 }
@@ -85,7 +87,7 @@ protected function getMediaUseTerm(string $uri) {
 /** 
  *Handle Peertube Video Caption vtt files
 */
-protected function viedoCaptions_handler(array $arr_data) {
+protected function videoCaptions_handler(array $arr_data) {
 	$captionUrl = $arr_data['prefix'] . '/api/v1/videos/' . $arr_data['video_id'] . '/captions';
 	try {
 		$result = \Drupal::httpClient()->get($captionUrl);
@@ -109,7 +111,7 @@ protected function viedoCaptions_handler(array $arr_data) {
 					
 				//set media use for caption file
 				if($vtt_file) {
-					$vtt_media_use = $this->getMediaUseTerm(PCDM_TRANS_URI);
+					$vtt_media_use = $this->getMediaUseTerm(self::PCDM_TRANS_URI);
 					$vtt_media = Media::create ([
 						'bundle' => 'file',
 						'name' => "Caption_" . $arr_data['video_name'] ."_" .$item['language']['id'],

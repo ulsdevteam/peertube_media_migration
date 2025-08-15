@@ -25,7 +25,6 @@ class CsvExportVtt extends DestinationBase {
         	'vid' => $destination_data['vid'],
 		'name' => $destination_data['name'], 
 		'oembed_url' => $destination_data['oembed_url'],
-                'tn_id' => $destination_data['tn_id'],
 		'video_id' => $destination_data['oembed_video_data'],
 		'parent_repo_item_id' => $destination_data['parent_repo_item_id']
 	];
@@ -64,7 +63,6 @@ class CsvExportVtt extends DestinationBase {
         'vid' => 'VID',
 	'name' => 'Media Name',
         'oembed_url' => 'Oembed Video URL',
-        'tn_id' => 'Thumbnail URI',
         'video_id' => 'Oembed Video ID',
         'parent_repo_item_id' => 'Parent Repository ItemID',
 	];
