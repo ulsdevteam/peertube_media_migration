@@ -77,33 +77,30 @@ class VideoImageSource extends ProcessPluginBase {
 				//set permanent
 				$tn_file->setPermanent();
 				$tn_file->save();
-
+				
 				//create media entity
-				if ($tn_file) {
-					$media_term = $this->getMediaUseTerm(self::PCDM_URI);
-					if($media_term) {
-						$media_item = Media::create([
-							'bundle' => 'image',
-							'name' => "Thumbnail_{$data['name']}",
-							'field_media_image' => [
-								'target_id' => $tn_file->id(),
-								'alt' => "Thumbnail of Video {$videoId}",
-							],
-							'field_media_use' => [ //refer to islandora media usage taxonomy
-								'target_id' => $media_term->id(),
-							],
-							'field_media_of' => [ //refer to parent repository item 
-								'target_id' => $parent_repository_item_id,
-							],
-						]);
-					$media_item->save();
-					return $media_item->id();
-					}
+				if (!$tn_file) {
+					return NULL;
 				}
-			}
-		}
+				$media_term = $this->getMediaUseTerm(self::PCDM_URI);
+				if($media_term) {
+					//return array for image fields needed
+					$data_result = [
+						'field_media_image' => [
+							'target_id' => $tn_file->id(),
+							'alt' => "Thumbnail of Video {$videoId}",
+							],
+						'field_media_use' => [
+							'target_id' => $media_term->id(),
+							]
+						];
+					return $data_result;
+					}
+				}//path
+			} //try
 		catch(\Exception $e) {
 		\Drupal::logger('custom_peertube_migration')->error('Failed to connect Peertube API: @msg.', ['@msg' => $e->getMessage()]);
+		return NULL;
 		}
 	}
 }

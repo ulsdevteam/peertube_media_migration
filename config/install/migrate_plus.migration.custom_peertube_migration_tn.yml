@@ -12,40 +12,51 @@ source:
   plugin: content_entity:media
   entity_type: media
   bundle: remote_video
+  key: id
   fields:
     - mid
     - vid
     - name
     - field_media_oembed_video
     - field_media_of
+  constants:
+    tn_name_prefix: "Thumbnail of Video: "
 process:
   # map source fields onto destination
-  vid:
+  name:
+    plugin: concat
+    source:
+      - constants/tn_name_prefix
+      - name/0/value                                                                                                                              uid:
     plugin: get
-    source: vid
-  id:
-    plugin: get
-    source: mid 
-  parent_repo_item_id:
+    source: uid
+  field_media_of:
     plugin: get
     source: field_media_of/0/target_id
-  oembed_url:                           
-    plugin: extract                      
-    source: field_media_oembed_video     
-    index: [0, value]
-    default_value: ''
   oembed_video_data:                               
     plugin: video_image_source               
     source: 
       - field_media_oembed_video/0/value 
       - field_media_of/0/target_id
       - name/0/value
-  name:                                                                                                                            
-    plugin: extract                                                                                                                
-    source: name                                                                                                                   
-    index: [0, value]
+  field_media_use/target_id:
+    plugin: extract
+    source: '@oembed_video_data'
+    index: 
+      - 'field_media_use'
+      - 'target_id'
+  field_media_image/target_id:
+    plugin: extract
+    source: '@oembed_video_data'
+    index: 
+      - 'field_media_image'
+      - 'target_id'
+  field_media_image/alt:
+    plugin: concat
+    source:
+      - "Thumbnail of Video"
+      - name/0/value
 destination: 
-  plugin: csv_export
-migration_tags:
-  - 'Export'
+  plugin: entity:media
+  default_bundle: image
 migration_dependencies: null

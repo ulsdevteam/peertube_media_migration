@@ -1,7 +1,7 @@
 langcode: en
 status: true
-id: custom_peertube_migration_vtt
-label: 'Migrate peertube video vtt into drupal'
+id: custom_peertube_migration_file
+label: 'Migrate peertube video captions drupal'
 migration_tags:
   - captions
 migration_group: custom_peertube_migration
@@ -21,6 +21,8 @@ source:
     - field: field_media_oembed_video 
       operator: 'IS NOT NULL'
       value: NULL
+  constants:
+    vtt_file_dir: 'public://vtt_files/'
 process:
   dest_filename:
     - plugin: callback
@@ -32,17 +34,19 @@ process:
   dest_filepath: 
     - plugin: concat
       source:
+        - constants/vtt_file_dir
         - '@dest_filename'
-  name: '@dest_filename'
-  field_media_file/target_id:
-    plugin: migration_lookup
-    migration: custom_peertube_migration_file
-    source: vtt_filename
-  field_media_use/target_id: source_meida_use
-  field_media_of/target_id: source_media_of
+  uri:
+    - plugin: skip_on_empty
+      method: process
+      source:
+        -  source_caption_urlpath
+    - plugin: file_copy
+      source:
+        - source_caption_urlpath
+        - '@dest_filepath'
+      file_exists: rename
+      move: false
 destination: 
-  plugin: entity:media
-  default_bundle: file
-migration_dependencies:
-  required:
-    - custom_peertube_migration_file
+  plugin: entity:file
+migration_dependencies: null
