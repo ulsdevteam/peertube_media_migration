@@ -12,4 +12,4 @@ The module includes tow migrations. custom\_peertube\_migration\_tn imports the 
    Peertube migration module configuration path `/admin/configuration/custom_peertube_migration`
 
 ## Migration dataflow
-   -  ![Vtt migration dataflow] (dataflow/vtt-migration-dataflow.png)
+   -  ![Vtt migration dataflow](dataflow/vtt-migration-dataflow.png)
