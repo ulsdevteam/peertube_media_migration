@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\custom_peertube_migration\Form;
+namespace Drupal\peertube_media_migration\Form;
 
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -10,21 +10,21 @@ use Drupal\Core\Database\Database;
  * Configure resource migration settings
  */
 
-class custom_peertube_migrationForm extends ConfigFormBase {
+class peertube_media_migrationForm extends ConfigFormBase {
 
 
     /**
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'custom_peertube_migration_settings';
+    return 'peertube_media_migration_settings';
   }
 
   /**
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    return ['custom_peertube_migration.settings'];
+    return ['peertube_media_migration.settings'];
   }
 
   /**
@@ -32,7 +32,7 @@ class custom_peertube_migrationForm extends ConfigFormBase {
     */
   public function buildForm(array $form, FormStateInterface $form_state) {
 
-    $config = $this->config('custom_peertube_migration.settings');
+    $config = $this->config('peertube_media_migration.settings');
 
     $form['connection'] = [
         '#type' => 'details',
@@ -40,10 +40,10 @@ class custom_peertube_migrationForm extends ConfigFormBase {
         '#open' => TRUE,
     ];
 
-    $form['connection']['custom_peertube_migration_base_uri'] = [
+    $form['connection']['peertube_media_migration_base_uri'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Peertube API Prefix'),
-	'#config_target' => 'custom_peertube_migration.settings:base_uri',
+	'#config_target' => 'peertube_media_migration.settings:base_uri',
     ];
     return parent::buildForm($form, $form_state);
   }

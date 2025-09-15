@@ -1,0 +1,11 @@
+peertube_media_migration.settings:
+  title: 'Peertube Media Migration Settings'
+  parent: system.admin_config
+  route_name: peertube_media_migration.config_form
+  weight: 100
+
+peertube_media_migration.peertube_media_migration_config:
+  title: 'Config'
+  parent: peertube_media_migration.settings
+  route_name: peertube_media_migration.config_form
+  weight: 10

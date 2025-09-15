@@ -1,0 +1,11 @@
+name: 'Peertube Media Migration'
+type: module
+description: 'Migrate media entities from Peertube to Drupal'
+core_version_requirement: ^10 || ^11 
+package: Custom
+dependencies:
+  - drupal:migrate
+  - migrate_drupal
+  - media:media
+  - file:file
+  - image:image

@@ -1,0 +1,5 @@
+id: peertube_media_migration
+label: 'Peertube Media Migration'
+description: 'A module to migrate video images and captions from peertube.'
+source_type: 'Peertube source'
+shared_configuration: null

@@ -1,6 +1,6 @@
-custom_peertube_migration.settings:
+peertube_media_migration.settings:
   type: config_object
-  label: 'Peertube Video Migration settings'
+  label: 'Peertube Media Migration settings'
   mapping:
     base_uri:
       type: string

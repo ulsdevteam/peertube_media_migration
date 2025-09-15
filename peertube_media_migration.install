@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * uninstall function for peertube migration module
+ */
+
+
+function peertube_media_migration_uninstall() {
+	$configList = [
+		'migrate_plus.migration_group.peertube_media_migration',
+		'migrate_plus.migration.peertube_media_migration_tnfile', 
+		'migrate_plus.migration.peertube_media_migration_tn',
+		'migrate_plus.migration.peertube_media_migration_file',
+		'migrate_plus.migration.peertube_media_migration_vtt',
+		];
+	foreach ($configList as $configitem) {
+		try {
+			\Drupal::configFactory()->getEditable($configitem)->delete();
+		}
+		catch (\Exception $err) {
+			\Drupal::logger("peertube_media_migration")->warning('Failed to delete module configuration @configitem : @err', [
+			'@configitem' => $configitem, '@err' => $err->getMessage(),]);
+		}
+	}		
+}

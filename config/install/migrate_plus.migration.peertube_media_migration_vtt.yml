@@ -1,0 +1,48 @@
+langcode: en
+status: true
+id: peertube_media_migration_vtt
+label: 'Migrate peertube video vtt into drupal'
+migration_tags:
+  - captions
+migration_group: peertube_media_migration
+
+source:
+  plugin: video_vtt_source
+  entity_type: media
+  bundle: remote_video
+  source_fields:
+    - field_media_oembed_video
+    - field_media_of
+  conditions:
+    - field: status
+      value: 1
+      operator: '='
+    - field: field_media_oembed_video 
+      operator: 'IS NOT NULL'
+      value: NULL
+process:
+  dest_filename:
+    - plugin: callback
+      callable: basename
+      source: source_caption_urlpath
+    - plugin: skip_on_empty
+      method: row
+      message: 'No captions for the video'
+  dest_filepath:
+    - plugin: concat
+      source:
+        - constants/vtt_file_dir
+        - '@dest_filename'
+  name: '@dest_filename'
+  field_media_file/target_id:
+    plugin: migration_lookup
+    migration: peertube_media_migration_file
+    source: vtt_filename
+  field_media_use/target_id: source_media_use
+  field_media_of/target_id: source_media_of
+destination: 
+  plugin: entity:media
+  default_bundle: file
+migration_dependencies:
+  required:
+    - peertube_media_migration_file

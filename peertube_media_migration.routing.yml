@@ -1,0 +1,7 @@
+peertube_media_migration.config_form:
+  path: '/admin/config/peertube_media_migration'
+  defaults:
+    _form: '\Drupal\peertube_media_migration\Form\peertube_media_migrationForm'
+    _title: 'Peertube Media Migration Settings'
+  requirements:
+    _permission: 'administer site configuration'

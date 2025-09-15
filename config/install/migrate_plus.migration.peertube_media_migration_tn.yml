@@ -1,0 +1,50 @@
+langcode: en
+status: true
+id: peertube_media_migration_tn
+label: 'Migrate peertube video thumbnail into drupal'
+migration_tags:
+  - thumbnails
+migration_group: peertube_media_migration
+
+source:
+  plugin: video_image_source
+  entity_type: media
+  bundle: remote_video
+  source_fields:
+    - field_media_oembed_video
+    - field_media_of
+  conditions:
+    - field: status
+      value: 1
+      operator: '='
+  constants:
+    tn_name_prefix: "Thumbnail_"
+process:
+  dest_filename:
+    - plugin: callback
+      callable: basename
+      source: source_tn_urlpath
+    - plugin: skip_on_empty
+      method: row
+      message: 'No thumbnail for the video'
+  name: 
+    - plugin: concat
+      source:
+        - constants/tn_name_prefix
+        - video_name
+  field_media_image/target_id:
+    plugin: migration_lookup
+    migration: peertube_media_migration_tnfile
+    source: video_id
+  thumbnail/target_id:
+    plugin: migration_lookup
+    migration: peertube_media_migration_tnfile
+    source: video_id
+  field_media_use/target_id: source_media_use
+  field_media_of/target_id: source_media_of
+destination: 
+  plugin: entity:media
+  default_bundle: image
+migration_dependencies:
+  required:
+    - peertube_media_migration_tnfile

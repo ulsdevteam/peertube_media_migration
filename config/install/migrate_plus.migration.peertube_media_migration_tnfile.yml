@@ -1,0 +1,48 @@
+langcode: en
+status: true
+id: peertube_media_migration_tnfile
+label: 'Migrate peertube video thumbnail'
+migration_tags:
+  - thumbnails
+migration_group: peertube_media_migration
+
+source:
+  plugin: video_image_source
+  entity_type: media
+  bundle: remote_video
+  source_fields:
+    - field_media_oembed_video
+    - field_media_of
+  conditions:
+    - field: status
+      value: 1
+      operator: '='
+  constants:
+    tn_file_dir: 'public://thumbnail_files/'
+process:
+  dest_filename:
+    - plugin: callback
+      callable: basename
+      source: source_tn_urlpath
+    - plugin: skip_on_empty
+      method: row
+      message: 'No thumbnail for the video'
+  dest_filepath: 
+    - plugin: concat
+      source:
+        - constants/tn_file_dir
+        - '@dest_filename'
+  uri:
+    - plugin: skip_on_empty
+      method: process
+      source:
+        - source_tn_urlpath
+    - plugin: file_copy
+      source:
+        - source_tn_urlpath
+        - '@dest_filepath'
+      file_exists: rename
+      move: false
+destination: 
+  plugin: entity:file
+migration_dependencies: null

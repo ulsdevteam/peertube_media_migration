@@ -5,23 +5,21 @@ namespace Drupal\peertube_media_migration\Plugin\migrate\source;
 use Drupal\migrate\Plugin\migrate\source\SourcePluginBase;      
 use Drupal\migrate\Row;
 use Drupal\migrate\Plugin\MigrationInterface; 
-use Drupal\migrate\MigrateSkipRowException;
 use Drupal\taxonomy\Entity\Term;
 
 /**
  * pull video link from peertube based on media node from drupal
  *
  * @MigrateSource(
- *   id = "video_vtt_source"
+ *   id = "video_image_source"
  * )
  */
 
-class VideoVttSource extends SourcePluginBase {
+class VideoImageSource extends SourcePluginBase {
 
   //declare a local constant
-  const PCDM_TRANS_URI = 'http://pcdm.org/use#Transcript';
+  const PCDM_URI = 'http://pcdm.org/use#ThumbnailImage';
 
-  protected $count;
   protected $rows = [];
   protected $entities;
   /**
@@ -30,10 +28,10 @@ class VideoVttSource extends SourcePluginBase {
   public function fields() {
     return [
 	'video_id' => $this->t('Video ID'),
-	'source_caption_urlpath' => $this->t('Vtt file path'),
-	'vtt_filename' => $this->t('Vtt file name'),
+	'video_name' => $this->t('Video Name'),
+	'source_tn_urlpath' => $this->t('Thumbnail filepath'),
 	'source_media_of' => $this->t('Parent Repository ItemID'),
-	'source_meida_use' => $this->t('vtt Media Use')
+	'source_meida_use' => $this->t('Media Use')
 	];
   }
 
@@ -42,11 +40,12 @@ class VideoVttSource extends SourcePluginBase {
    */
   public function getIds() {
    //define ids used for identification
-    return [
-	'vtt_filename' => [
-		'type' => 'string',
-		],
+	$ids = [
+		'video_id' => [
+			'type' => 'string',
+			],
 	];
+	return $ids;
   }
 
   /**
@@ -67,7 +66,6 @@ class VideoVttSource extends SourcePluginBase {
     $source_fields = $this->configuration['source_fields']; 
     $source_oembed_video = $this->configuration['source_fields'][0] ?? '';
     $parent_repo_item_id = $this->configuration['source_fields'][1] ?? '';
-    $video_name = $this->configuration['source_fields'][2] ?? '';
     $conditions = $this->configuration['conditions'] ?? [];
 
    //retrieve remote videos
@@ -94,25 +92,24 @@ class VideoVttSource extends SourcePluginBase {
   
     $rows = [];
     foreach ($entities as $entity) {
-	$arr_vttData = $this->getVideoID($entity, $source_oembed_video);
-        if (empty($arr_vttData)) {
+	$arr_Data = $this->getVideoID($entity, $source_oembed_video);
+        if (empty($arr_Data)) {
 		continue;
 	}
-        $captions = $this->videoCaptions_handler($arr_vttData); //get file_url
-	if ( empty($captions) ) {
-		 continue;
-	}
-	foreach ($captions as $caption) {
-		$rows[] = [
-			'vtt_filename' => basename($caption['source_caption_urlpath'], '.vtt'), 
-			'video_id' => $caption['video_id'],
-                	'source_caption_urlpath' => $caption['source_caption_urlpath'],
-                	'source_media_use' => $caption['source_media_use'],
-			'source_media_of' => $caption['source_media_of']
+        
+        $tn_result = $this->videoImage_handler($arr_Data); //get thumbnail file_url
+	if ( empty($tn_result) ) {
+		continue;
+	} 
+	$rows[] = [
+		'video_id' => $tn_result['video_id'], 
+		'video_name' => $tn_result['video_name'],
+                'source_tn_urlpath' => $tn_result['source_tn_urlpath'],
+                'source_media_use' => $tn_result['source_media_use'],
+		'source_media_of' => $tn_result['source_media_of'],
 		]; 
-	}
-    }
-   return $rows;
+     }
+   	return $rows;
   }
 
   /**
@@ -137,13 +134,13 @@ class VideoVttSource extends SourcePluginBase {
 		$end = min( $endPos1 !== false ? $endPos1: PHP_INT_MAX, $endPos2 !== false ? $endPos2 : PHP_INT_MAX);
 
 		$videoId = ($end === PHP_INT_MAX) ? $remainings : substr($remainings, 0, $end);
-		$vtt_array = [
+		$data_array = [
 		'prefix' => trim($uri_prefix),
 		'video_name' => $entity->label(),
 		'video_id' => $videoId,
                 'repo_item_id' => $entity->get('field_media_of')->target_id,
 		];
-		return $vtt_array;
+		return $data_array;
 	}
 }
 
@@ -168,33 +165,29 @@ protected function getMediaUseTerm(string $uri) {
 }
 
 /** 
- *Handle Peertube Video Caption vtt files
+ *Handle Peertube Video Thumbnail
 */
-protected function videoCaptions_handler(array $arr_data) {
-	$captionUrl = $arr_data['prefix'] . '/api/v1/videos/' . $arr_data['video_id'] . '/captions';
-        $vtt_media_use = $this->getMediaUseTerm(self::PCDM_TRANS_URI);
+protected function videoImage_handler(array $arr_data) {
+	$apiUrl = $arr_data['prefix'] . '/api/v1/videos/' . $arr_data['video_id'];
+        $media_use = $this->getMediaUseTerm(self::PCDM_URI);
         try {
-                $result = \Drupal::httpClient()->get($captionUrl);
-                $result_data= json_decode($result->getBody(), TRUE); //array resp
-                if (!empty($result_data['data'])){
-                        $vtt_file_ids = [];
-                        foreach ($result_data['data'] as $item) {
-                                if (empty($item['captionPath'])) {
-                                        continue;
-                                }
-                                $vtt_file_ids[] = [
-					'video_id' => $arr_data['video_id'],
-                                        'source_caption_urlpath' => $arr_data['prefix'] . $item['captionPath'],
-                                        'source_media_use' => $vtt_media_use->id() ?? '',
-					'source_media_of' => $arr_data['repo_item_id']
+		$tn_file_data= [];
+                $request = \Drupal::httpClient()->get($apiUrl);
+                $result = json_decode($request->getBody(), TRUE); //array resp
+                if (!empty($result['thumbnailPath'])) {
+                        $tn_file_data = [
+				'id' => $result['id'],
+				'video_id' => $arr_data['video_id'],
+				'video_name' => $arr_data['video_name'],
+				'source_tn_urlpath' => $arr_data['prefix'] . $result['thumbnailPath'],
+				'source_media_use' => $media_use->id() ?? '',
+				'source_media_of' => $arr_data['repo_item_id']
                                         ];
-                        } //end for
-
-                        return $vtt_file_ids; //array of created caption media ids
-                }
+		}
+		return $tn_file_data;
         }
         catch(\Exception $e) {
-                \Drupal::logger('peertube_media_migration')->error('Failed to retrieve caption from Peertube endpoint @err', ['@err'=>$e->getMessage()]);
+		\Drupal::logger('peertube_media_migration')->error('Failed to retrieve data from Peertube endpoint @err', ['@err'=>$e->getMessage()]);
                 return [];
         }
   }
@@ -202,17 +195,7 @@ protected function videoCaptions_handler(array $arr_data) {
    * {@inheritdoc}
    */
   public function __toString() {
-    return "Peertube Transcription migration";
+    return "Peertube Thumbnail migration";
   }
-
- /**
-  * {@inheritdoc}
-  */
-  public function prepareRow(Row $row) {
-	$check_filename = $row->getSourceProperty('vtt_filename');
-//	$unique_id = basename($source_caption_urlpath, '.vtt');
-//	$row->setSourceProperty('vtt_filename', $check_filename);
-	return parent::prepareRow($row);
-  }  
 
 }
