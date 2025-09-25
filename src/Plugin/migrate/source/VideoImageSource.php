@@ -3,6 +3,7 @@
 namespace Drupal\peertube_media_migration\Plugin\migrate\source;
 
 use Drupal\migrate\Plugin\migrate\source\SourcePluginBase;      
+use GuzzleHttp\Exception\RequestException;
 use Drupal\migrate\Row;
 use Drupal\migrate\Plugin\MigrationInterface; 
 use Drupal\taxonomy\Entity\Term;
@@ -22,6 +23,65 @@ class VideoImageSource extends SourcePluginBase {
 
   protected $rows = [];
   protected $entities;
+
+/**
+   * {@inheritdoc}
+   */
+
+ public function __construct(array $configuration, $plugin_id, $plugin_definition, MigrationInterface $migration) {
+	parent::__construct($configuration, $plugin_id, $plugin_definition, $migration);
+
+	//get yml configuration
+	if (isset($configuration['entity_type']) ||
+		isset($configuration['bundle']) ||
+	   	isset($configuration['source_fields']) ||
+	   	isset($configuration['conditions']) ||
+	   	isset($configuration['source_oembed_video']) ||
+	   	isset($configuration['parent_repo_item_id'])) {
+	$entity_type = $configuration['entity_type'] ?? 'media';
+	$bundle = $configuration['bundle'] ?? 'remote_video';                                                                                   
+	$source_fields = $configuration['source_fields'];
+	$conditions = $configuration['conditions'] ?? [];
+	$this->source_oembed_video = $configuration['source_fields'][0] ?? '';
+	$this->parent_repo_item_id = $configuration['source_fields'][1] ?? '';
+	}
+
+	//retry params
+	$this->request_retry = [
+		'retries_num' => $configuration['max_retires'] ?? 3,
+		'delay' => $configuration['delay'] ?? 1  
+	];
+
+	//get media use of the new drupal image file entity
+	$this->media_use = $this->getMediaUseTerm(self::PCDM_URI); 
+	//get peertube api prefix as the pattern to match
+	$this->uri_prefix = \Drupal::config('peertube_media_migration.settings')->get('base_uri');
+	$this->pattern = trim($this->uri_prefix) . "/w/";
+	
+	//load remote_video entities
+	$query = \Drupal::entityQuery($entity_type)
+		->condition('bundle', $bundle)                                                                                                            
+		->sort('mid', 'ASC')
+		->accessCheck(FALSE);
+	 if ( !empty($conditions) ) {
+		foreach ($conditions as $cond) {
+			$op = $cond['operator'] ?? '=';
+			$query-> condition($cond['field'], $cond['value'], $op);
+		}
+	}
+	//$query->range(0,1000);                                                                                                                          
+	$this->entity_ids = $query->execute();
+	if ( empty($this->entity_ids) ) {
+	\Drupal::logger('peertube_media_migration')->info('No entities found for type: @type, bundle: @bundle',['@type' => $entity_type, '@bundle' => $bundle,]);
+		$this->entities =[];
+        } else {
+		$this->entities =\Drupal::entityTypeManager()                                                                                                       
+			->getStorage($entity_type)
+			->loadMultiple($this->entity_ids);
+	}
+  }
+
+
   /**
    * {@inheritdoc}
    */
@@ -52,52 +112,23 @@ class VideoImageSource extends SourcePluginBase {
    * {@inheritdoc}
    */
   public function initializeIterator(): \Traversable { 
-    $this->rows = $this->buildVids();
+    $this->rows = $this->buildVids($this->entities, $this->source_oembed_video, $this->request_retry);
     return new \ArrayIterator($this->rows);  	
     }
 
   /**
     * Construct Video Rows from Contents
     */
-  protected function buildVids(): array {
-    //get yml configuration
-    $entity_type = $this->configuration['entity_type'] ?? 'media';
-    $bundle = $this->configuration['bundle'] ?? 'remote_video';
-    $source_fields = $this->configuration['source_fields']; 
-    $source_oembed_video = $this->configuration['source_fields'][0] ?? '';
-    $parent_repo_item_id = $this->configuration['source_fields'][1] ?? '';
-    $conditions = $this->configuration['conditions'] ?? [];
+  protected function buildVids(array $entities, string $oembedUrl, array $request_retry): array {
 
-   //retrieve remote videos
-   $query = \Drupal::entityQuery($entity_type)
-	->condition('bundle', $bundle)
-	->accessCheck(FALSE);
-    if ( !empty($conditions) ) {
-    	foreach ($conditions as $cond) {
-		$op = $cond['operator'] ?? '=';
-		$query-> condition($cond['field'], $cond['value'], $op);
-			}
-	}
-    $entity_ids = $query->execute();
-
-    //return an empty iterator if no entity found
-    if ( empty($entity_ids) ) {
-	\Drupal::logger('peertube_media_migration')->info('No entities found for type: @type, bundle: @bundle',['@type' => $entity_type, '@bundle' => $bundle,]);
-	return [];
-	}
-
-    $entities =\Drupal::entityTypeManager()
-	->getStorage($entity_type)
-	->loadMultiple($entity_ids);
-  
     $rows = [];
     foreach ($entities as $entity) {
-	$arr_Data = $this->getVideoID($entity, $source_oembed_video);
+	$arr_Data = $this->getVideoID($entity, $oembedUrl);
         if (empty($arr_Data)) {
 		continue;
 	}
         
-        $tn_result = $this->videoImage_handler($arr_Data); //get thumbnail file_url
+        $tn_result = $this->videoImage_handler($arr_Data, $request_retry); //get thumbnail file_url
 	if ( empty($tn_result) ) {
 		continue;
 	} 
@@ -119,15 +150,11 @@ class VideoImageSource extends SourcePluginBase {
      $f_videoUrl = $entity->get($fieldName);                                                                                                      
      $videoUrl =$f_videoUrl->value; 
 
-    //get peertube api prefix as the pattern to match
-    $uri_prefix =\Drupal::config('peertube_media_migration.settings')->get('base_uri'); 
-    $pattern = trim($uri_prefix) . "/w/";
-    
-     if ( stripos($videoUrl, $pattern) !== 0) {
+     if ( stripos($videoUrl, $this->pattern) !== 0) {
 	\Drupal::logger('peertube_media_migration')->info('Media Video: @name Source URL: @data  does not match peertube pattern.', ['@name'=>$entity->get("name")->value, '@data' => $videoUrl]);
 	return NULL;
 	} else {
-	       $remainings = substr($videoUrl, strlen($pattern));
+	       $remainings = substr($videoUrl, strlen($this->pattern));
 		//find first special char ?/ after pattern 
 		$endPos1 = strpos($remainings, '/');
 		$endPos2 = strpos($remainings, '?');
@@ -135,7 +162,7 @@ class VideoImageSource extends SourcePluginBase {
 
 		$videoId = ($end === PHP_INT_MAX) ? $remainings : substr($remainings, 0, $end);
 		$data_array = [
-		'prefix' => trim($uri_prefix),
+		'prefix' => trim($this->uri_prefix),
 		'video_name' => $entity->label(),
 		'video_id' => $videoId,
                 'repo_item_id' => $entity->get('field_media_of')->target_id,
@@ -167,29 +194,54 @@ protected function getMediaUseTerm(string $uri) {
 /** 
  *Handle Peertube Video Thumbnail
 */
-protected function videoImage_handler(array $arr_data) {
+protected function videoImage_handler(array $arr_data, array $retries) {
 	$apiUrl = $arr_data['prefix'] . '/api/v1/videos/' . $arr_data['video_id'];
-        $media_use = $this->getMediaUseTerm(self::PCDM_URI);
-        try {
-		$tn_file_data= [];
-                $request = \Drupal::httpClient()->get($apiUrl);
-                $result = json_decode($request->getBody(), TRUE); //array resp
-                if (!empty($result['thumbnailPath'])) {
-                        $tn_file_data = [
-				'id' => $result['id'],
-				'video_id' => $arr_data['video_id'],
-				'video_name' => $arr_data['video_name'],
-				'source_tn_urlpath' => $arr_data['prefix'] . $result['thumbnailPath'],
-				'source_media_use' => $media_use->id() ?? '',
-				'source_media_of' => $arr_data['repo_item_id']
+	for ($try =0; $try <= $retries['retries_num']; $try++) {
+        	try {
+			$tn_file_data= [];
+                	$request = \Drupal::httpClient()->get($apiUrl);
+			$request_status = $request->getStatusCode();
+                	$result = json_decode($request->getBody(), TRUE); //array resp
+			
+                	if ($request_status === 200) {
+				if (!empty($result['thumbnailPath'])) {
+                        		$tn_file_data = [
+					'id' => $result['id'],
+					'video_id' => $arr_data['video_id'],
+					'video_name' => $arr_data['video_name'],
+					'source_tn_urlpath' => $arr_data['prefix'] . $result['thumbnailPath'],
+					'source_media_use' => $this->media_use->id() ?? '',
+					'source_media_of' => $arr_data['repo_item_id']
                                         ];
-		}
-		return $tn_file_data;
-        }
-        catch(\Exception $e) {
-		\Drupal::logger('peertube_media_migration')->error('Failed to retrieve data from Peertube endpoint @err', ['@err'=>$e->getMessage()]);
-                return [];
-        }
+				}
+				return $tn_file_data;
+        		}
+		} catch(RequestException $e) { // handle RequestException (e.g. 4xx/5xx responses)
+			if ($e->hasResponse()) {
+				$resp = $e->getResponse();
+				//handle peertube rate limit with Retry-After header
+				if ($resp->getStatusCode() === 429) {
+					if ($try < $retries['retries_num']) {
+						$RetryAfter = $e->getResponse()->getHeader('Retry-After');
+						$delay_time = !empty($RetryAfter) ? (int)$RetryAfter[0] * pow(2, $try) : $retries['delay'] * pow(2, $try);  //increase retry delay exponentially
+						\Drupal::logger('peertube_media_migration')->info('Reached Peertube rate limit. @delay seconds before retry @try on @VID',['@delay'=>$delay_time,'@try'=>$try+1,'@VID'=>$arr_data['video_id'],]);
+						sleep($delay_time);
+						continue;
+					} else {
+						\Drupal::logger('peertube_media_migration')->error('Max retries to retrieve peertube api on Video: @VID',['@VID' => $arr_data['video_id'],]);
+						return [];
+						}
+				}
+				//other statuscode 
+				 \Drupal::logger('peertube_media_migration')->error('Max retries to retrieve peertube api on Video: @VID',['@VID' => $arr_data['video_id'],]);
+				  return [];
+			}
+		} catch (\Exception $e) {
+			\Drupal::logger('peertube_media_migration')->error('Failed to retrieve data from Peertube endpoint @err', ['@err'=>$e->getMessage()]);
+ 	              	return [];
+        	}
+	}
+	return [];
   }
   /**
    * {@inheritdoc}
