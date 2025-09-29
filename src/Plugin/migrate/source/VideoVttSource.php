@@ -220,7 +220,7 @@ protected function videoCaptions_handler(array $arr_data, array $retries) {
                         		} //end for
                         		return $vtt_file_ids; //array of created caption media ids
                 		} else {
-					\Drupal::logger('peertube_media_migration')->info('No peertube data retrieved on @VID',['@VID'=>$arr_data['video_id'],]);
+					//if no video caption data from peertube  
 					return [];
 					}
 				}
