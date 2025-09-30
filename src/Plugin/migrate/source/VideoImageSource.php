@@ -21,12 +21,28 @@ class VideoImageSource extends SourcePluginBase {
   //declare a local constant
   const PCDM_URI = 'http://pcdm.org/use#ThumbnailImage';
 
+ /**
+  * Current Remote Video Oembed data
+  * @var string
+  */
+  protected $source_oembed_video;
+
+ /**
+  * Current Remote Video's parent repository
+  * @var string
+  */
+  protected $parent_repo_item_id;
+  
   protected $rows = [];
   protected $entities;
+  protected $request_retry; //request peertube api parameters
+  protected $media_use; //media usage info
+  protected $uri_prefix;
+  protected $pattern; //remote video oembedUrl filter pattern
 
 /**
-   * {@inheritdoc}
-   */
+ * {@inheritdoc}
+ */
 
  public function __construct(array $configuration, $plugin_id, $plugin_definition, MigrationInterface $migration) {
 	parent::__construct($configuration, $plugin_id, $plugin_definition, $migration);
@@ -69,15 +85,14 @@ class VideoImageSource extends SourcePluginBase {
 			$query-> condition($cond['field'], $cond['value'], $op);
 		}
 	}
-	//$query->range(0,1000);                                                                                                                          
-	$this->entity_ids = $query->execute();
-	if ( empty($this->entity_ids) ) {
+	$entity_ids = $query->execute();
+	if ( empty($entity_ids) ) {
 	\Drupal::logger('peertube_media_migration')->info('No entities found for type: @type, bundle: @bundle',['@type' => $entity_type, '@bundle' => $bundle,]);
 		$this->entities =[];
         } else {
 		$this->entities =\Drupal::entityTypeManager()                                                                                                       
-			->getStorage($entity_type)
-			->loadMultiple($this->entity_ids);
+		->getStorage($entity_type)
+		->loadMultiple($entity_ids);
 	}
   }
 
@@ -151,7 +166,7 @@ class VideoImageSource extends SourcePluginBase {
      $videoUrl =$f_videoUrl->value; 
 
      if ( stripos($videoUrl, $this->pattern) !== 0) {
-	\Drupal::logger('peertube_media_migration')->info('Media Video: @name Source URL: @data  does not match peertube pattern.', ['@name'=>$entity->get("name")->value, '@data' => $videoUrl]);
+	//\Drupal::logger('peertube_media_migration')->info('Media Video: @name Source URL: @data  does not match peertube pattern.', ['@name'=>$entity->get("name")->value, '@data' => $videoUrl]);
 	return NULL;
 	} else {
 	       $remainings = substr($videoUrl, strlen($this->pattern));
@@ -224,7 +239,7 @@ protected function videoImage_handler(array $arr_data, array $retries) {
 					if ($try < $retries['retries_num']) {
 						$RetryAfter = $e->getResponse()->getHeader('Retry-After');
 						$delay_time = !empty($RetryAfter) ? (int)$RetryAfter[0] * pow(2, $try) : $retries['delay'] * pow(2, $try);  //increase retry delay exponentially
-						\Drupal::logger('peertube_media_migration')->info('Reached Peertube rate limit. @delay seconds before retry @try on @VID',['@delay'=>$delay_time,'@try'=>$try+1,'@VID'=>$arr_data['video_id'],]);
+						// \Drupal::logger('peertube_media_migration')->info('Reached Peertube rate limit. @delay seconds before retry @try on @VID',['@delay'=>$delay_time,'@try'=>$try+1,'@VID'=>$arr_data['video_id'],]);
 						sleep($delay_time);
 						continue;
 					} else {
