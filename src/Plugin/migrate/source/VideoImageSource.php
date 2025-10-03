@@ -238,7 +238,7 @@ protected function videoImage_handler(array $arr_data, array $retries) {
 				if ($resp->getStatusCode() === 429) {
 					if ($try < $retries['retries_num']) {
 						$RetryAfter = $e->getResponse()->getHeader('Retry-After');
-						$delay_time = !empty($RetryAfter) ? (int)$RetryAfter[0] * pow(2, $try) : $retries['delay'] * pow(2, $try);  //increase retry delay exponentially
+						$delay_time = !empty($RetryAfter) ? (int)$RetryAfter[0] : $retries['delay']; 
 						// \Drupal::logger('peertube_media_migration')->info('Reached Peertube rate limit. @delay seconds before retry @try on @VID',['@delay'=>$delay_time,'@try'=>$try+1,'@VID'=>$arr_data['video_id'],]);
 						sleep($delay_time);
 						continue;
